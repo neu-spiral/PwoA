@@ -15,8 +15,8 @@ preHBaR=${dataset}_${model}_xw_1_lx_0.0005_ly_0.005_adv.pt
 distillModel=${preHBaR}
 
 xw=0
-lx=0.00001
-ly=0.00005
+lx=0.000001
+ly=0.000005
 
 pr=(0.5 0.75 0.875 0.9375)
 
