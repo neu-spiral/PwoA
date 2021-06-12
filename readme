@@ -1,0 +1,18 @@
+This is the released repo for our work entitled `Pruning Adversarially Robust Neural Networks without Adversarial Examples`. 
+
+** Environment **
+pytorch-1.6.0
+torchvision-0.7.0
+numpy-1.16.1
+scipy-1.3.1
+tqdm-4.33.0
+yaml-0.1.7
+
+** Experiments **
+One could produce the main results of Table 1, 2, 3, 4 & Figure 3, 4, 5 (KD+HBaR) by this repository. We will release the full version of the repository along with pre-tranined models soon.
+
+To reproduce the HBaR experiments that we have in the paper, one could run our batch script by the following instruction:
+    source env.sh
+    mnist-KDHBaR.sh         # PK-HBaR on MNIST
+    cifar10-KDHBaR.sh       # PK-HBaR on CIFAR-10
+    cifar100-KDHBaR.sh      # PK-HBaR on CIFAR-100

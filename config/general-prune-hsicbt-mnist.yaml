@@ -1,0 +1,48 @@
+batch_size: 256
+learning_rate: 0.0001
+epochs: 50
+sigma: 5.
+lambda_x: 0.0
+lambda_y: 0.0
+seed: 1234
+k_type_y: linear
+
+device: cuda
+model: lenet3
+data_code: mnist
+model_file: test.pt
+load_model: test.pt
+checkpoint: null
+task: prune
+training_type: hsictrain
+
+optimizer: adam
+lr_scheduler : default
+log_batch_interval: 10
+verbose: 0
+exp_index: null
+do_training: True
+save_last_model_only: False
+
+sparsity_type: irregular
+prune_ratio: v1
+admm: True
+admm_epochs: 1
+rho: 0.01
+multi_rho: True
+retrain_bs: 256
+retrain_lr: 0.0001
+retrain_ep: 50
+retrain_lx: 0.
+retrain_ly: 0.
+retrain_opt: adam
+retraining_type: hsictrain
+
+xentropy_weight: 0.
+hsic_weight: 1.
+
+attack_type: pgd
+epsilon: 0.3
+pgd_steps: 40
+pgd_alpha: 0.01
+random_start: True

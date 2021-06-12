@@ -1,0 +1,56 @@
+batch_size: 128
+learning_rate: 0.01
+epochs: 100
+sigma: 5.
+lambda_x: 0
+lambda_y: 0
+seed: 1234
+k_type_y: linear
+
+device: cuda
+model: wideresnet
+data_code: cifar100
+num_classes: 100
+model_file: test.pt
+load_model: test.pt
+checkpoint: null
+task: prune
+training_type: hsictrain
+
+optimizer: sgd
+lr_scheduler : default
+warmup :  False
+warmup_lr :  0.0001
+warmup_epochs :  5
+mix_up :  False
+alpha :  0.3
+smooth :  False
+smooth_eps :  0
+log_batch_interval: 10
+verbose: 0
+exp_index: null
+do_training: True
+save_last_model_only: False
+
+sparsity_type: irregular
+prune_ratio: v1
+admm: True
+admm_epochs: 20
+rho: 0.0001
+multi_rho: True
+retrain_bs: 128
+retrain_lr: 0.01
+retrain_ep: 100
+retrain_lx: 0
+retrain_ly: 0
+retrain_opt: sgd
+retraining_type: hsictrain
+
+xentropy_weight: 0.
+hsic_weight: 1.
+
+attack_type: pgd
+epsilon: 8
+pgd_steps: 10
+pgd_alpha: 2
+random_start: True
