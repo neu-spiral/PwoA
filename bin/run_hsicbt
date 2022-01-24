@@ -11,21 +11,21 @@ import os
 def get_args():
     """ args from input
     """
-    parser = argparse.ArgumentParser(description='HSIC-Bottleneck research')
+    parser = argparse.ArgumentParser(description='Pruning Adversarially Robust Neural Networks without Adversarial Examples')
     
     parser.add_argument('-cfg', '--config', required=True,
         type=str, help='config input path')
     parser.add_argument('-tt', '--training-type', default='',
-        type=str, help='training types [hsictrain|format|backprop]')
+        type=str, help='training types [hsicprune|backprop]')
     parser.add_argument('-bs', '--batch-size', default=0,
         type=int, help='minibatch size')
     parser.add_argument('-op', '--optimizer', default='', type=str, help='optimizer')
     parser.add_argument('-lr', '--learning-rate', default=0,
         type=float, help='learning rate')
     parser.add_argument('-lx', '--lambda-x', default=0,
-        type=float, help='the coefficient of the HSIC-bottleneck objective')     
+        type=float, help='the coefficient of the HSIC objective')     
     parser.add_argument('-ly', '--lambda-y', default=0,
-        type=float, help='the coefficient of the HSIC-bottleneck objective')        
+        type=float, help='the coefficient of the HSIC objective')        
     parser.add_argument('-ep', '--epochs', default=-1,
         type=int, help='number of training epochs')
     parser.add_argument('-s', '--sigma', default=0,
@@ -33,11 +33,11 @@ def get_args():
     parser.add_argument('-sd', '--seed', default=0,
         type=int, help='random seed for the trial')
     parser.add_argument('-dc', '--data-code', default='',
-        type=str, help='name of the working dataset [mnist|fmnist|cifar10]')
+        type=str, help='name of the working dataset [mnist|cifar10|cifar100]')
     parser.add_argument('-m', '--model', default='',
-        type=str, help='name of the activation func [linear|conv|reslinear|resconv]')
+        type=str, help='model architecture')
     parser.add_argument('-mf', '--model-file', default='',
-        type=str, help='filename of the interested HSIC-trained model file')
+        type=str, help='filename for saved model file')
     parser.add_argument('-db', '--debug',
         action='store_true', help='debug usage')
     parser.add_argument('-nc', '--num_classes', default=10, type=int, help='number of classes')
@@ -56,7 +56,7 @@ def get_args():
     parser.add_argument('-relx', '--retrain-lx', default=0, type=float, help='lx of the masked retrain (default: -bs)')
     parser.add_argument('-rely', '--retrain-ly', default=0, type=float, help='ly of the masked retrain (default: -bs)')
     parser.add_argument('-reopt', '--retrain-opt', default='',type=str, help='retraining optimizer')
-    parser.add_argument('-rett', '--retraining-type', default='',type=str, help='retraining types [hsictrain|format|backprop]')
+    parser.add_argument('-rett', '--retraining-type', default='',type=str, help='retraining types [hsictprune|backprop]')
     parser.add_argument('-slmo', '--save_last_model_only', action='store_true', help='save last model only')
     parser.add_argument('-lm', '--load-model', default='', type=str, help='filename of the pre-trained model file')
     parser.add_argument('-l1', '--l1-norm', action='store_true', help='l1 norm on weights, only for xentropy family')
@@ -97,7 +97,7 @@ def get_args():
     # arguments for distillation
     parser.add_argument('--distill', action='store_true', help='if apply distillation loss')
     parser.add_argument('--distill_loss', type=str, default='kl', help='type of distillation loss')
-    parser.add_argument('--distill_model_path', type=str, default='/home/tong/MIBottleneck/MIBottleneck-Pruning/assets/models/raw/cifar10_resnet18_mart_hsic_lx_0_lx_0.0005_ly_0.005_ep93.pt', help='where to load pretrained distillation model')
+    parser.add_argument('--distill_model_path', type=str, default='', help='where to load pretrained distillation model')
     parser.add_argument('--distill_temp', default=30, type=float, help='temperature for kl')
     parser.add_argument('--distill_alpha', default=1, type=float, help='weight for distillation loss')
    
