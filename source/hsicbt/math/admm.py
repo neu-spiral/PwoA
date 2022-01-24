@@ -20,6 +20,7 @@ class ADMM:
         self.rho = rho
         self.rhos = {}
         self.prune_ratio = config_dict['prune_ratio']
+        self.device = config_dict['device']
         
         self.init(config, model)
 
@@ -38,7 +39,7 @@ class ADMM:
                 self.prune_ratios = raw_dict['prune_ratios']
                 for k, v in self.prune_ratios.items():
                     self.rhos[k] = self.rho
-                
+                #print(self.rho)
                 # Tong added: if pruning ratio is given
                 if isinstance(self.prune_ratio, float):
                     for k in self.prune_ratios:
@@ -49,8 +50,8 @@ class ADMM:
                 for (name, W) in model.named_parameters():
                     if name not in self.prune_ratios:
                         continue
-                    self.ADMM_U[name] = torch.zeros(W.shape).cuda()  # add U
-                    self.ADMM_Z[name] = torch.Tensor(W.shape).cuda()  # add Z
+                    self.ADMM_U[name] = torch.zeros(W.shape).to(self.device)  # add U
+                    self.ADMM_Z[name] = torch.Tensor(W.shape).to(self.device)  # add Z
                     # if(len(W.size()) == 4):
                     #     if name not in self.prune_ratios:
                     #         continue
@@ -121,7 +122,7 @@ def weight_pruning(weight, name, prune_ratio, sparsity_type, cross_x=4, cross_f=
          a pytorch tensor whose elements/column/row that have lowest l2 norms(equivalent to absolute weight here) are set to zero
 
     """
-
+    device = weight.device
     weight = weight.cpu().detach().numpy()  # convert cpu tensor to numpy
     #cross_x = args.cross_x
     #cross_f = args.cross_f
@@ -140,8 +141,7 @@ def weight_pruning(weight, name, prune_ratio, sparsity_type, cross_x=4, cross_f=
             np.float32
         )  # has to convert bool to float32 for numpy-tensor conversion
         weight[under_threshold] = 0
-        return torch.from_numpy(above_threshold).cuda(), torch.from_numpy(
-            weight).cuda()
+        return torch.from_numpy(above_threshold).to(device), torch.from_numpy(weight).to(device)
 
     ####################################
 
@@ -161,7 +161,7 @@ def weight_pruning(weight, name, prune_ratio, sparsity_type, cross_x=4, cross_f=
         expand_above_threshold = expand_above_threshold.reshape(shape)
         weight = weight.reshape(shape)
         return torch.from_numpy(
-            expand_above_threshold).cuda(), torch.from_numpy(weight).cuda()
+            expand_above_threshold).to(device), torch.from_numpy(weight).to(device)
 
     elif (sparsity_type == "filter"):
         shape = weight.shape
@@ -180,7 +180,7 @@ def weight_pruning(weight, name, prune_ratio, sparsity_type, cross_x=4, cross_f=
         weight = weight.reshape(shape)
         expand_above_threshold = expand_above_threshold.reshape(shape)
         return torch.from_numpy(
-            expand_above_threshold).cuda(), torch.from_numpy(weight).cuda()
+            expand_above_threshold).to(device), torch.from_numpy(weight).to(device)
     elif (sparsity_type == "bn_filter"):
         ## bn pruning is very similar to bias pruning
         weight_temp = np.abs(weight)
@@ -191,8 +191,7 @@ def weight_pruning(weight, name, prune_ratio, sparsity_type, cross_x=4, cross_f=
             np.float32
         )  # has to convert bool to float32 for numpy-tensor conversion
         weight[under_threshold] = 0
-        return torch.from_numpy(above_threshold).cuda(), torch.from_numpy(
-            weight).cuda()
+        return torch.from_numpy(above_threshold).to(device), torch.from_numpy(weight).to(device)
     else:
         raise SyntaxError("Unknown sparsity type")
 
@@ -284,23 +283,34 @@ def append_admm_loss(ADMM, model, ce_loss):
             continue
 
         admm_loss[name] = 0.5 * ADMM.rhos[name] * (torch.norm(W - ADMM.ADMM_Z[name] + ADMM.ADMM_U[name], p=2)**2)
+        #print(name, admm_loss[name], ADMM.rhos[name])
         #print(name, torch.norm(W - ADMM.ADMM_Z[name] + ADMM.ADMM_U[name], p=2)**2)
         # admm_loss[name] = 0.5 * ADMM.rhos[name] * (torch.norm(ADMM.ADMM_Z[name] + ADMM.ADMM_U[name], p=2) ** 2)  # test if Z,U are net detached
+    
     mixed_loss = 0
     mixed_loss += ce_loss
     for k, v in admm_loss.items():
         mixed_loss += v
+    #print('admm_loss: ', mixed_loss)
     return ce_loss, admm_loss, mixed_loss
 
 
 def admm_multi_rho_scheduler(ADMM, name):
     """
     It works better to make rho monotonically increasing
-    rho: 0.01   ->  50epochs -> 1
-         0.0001 -> 100epochs -> 1
+    rho: using 1.1: 
+           0.01   ->  50epochs -> 1
+           0.0001 -> 100epochs -> 1
+         using 1.2:
+           0.01   -> 25epochs -> 1
+           0.0001 -> 50epochs -> 1
+         using 1.3:
+           0.001   -> 25epochs -> 1
+         using 1.6:
+           0.001   -> 16epochs -> 1
     """
     current_rho = ADMM.rhos[name]
-    ADMM.rhos[name] = max(1, 1.1*current_rho)  # choose whatever you like
+    ADMM.rhos[name] = min(1, 1.35*current_rho)  # choose whatever you like
     
 def admm_adjust_learning_rate(optimizer, epoch, config_dict):
     """ (The pytorch learning rate scheduler)

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
 from torch.autograd import Variable
+from torchsummary import summary
 
 import sys
 import numpy as np
@@ -51,7 +52,7 @@ class wide_basic(nn.Module):
         return out, output_list
 
 class WideResNet(nn.Module):
-    def __init__(self, depth, widen_factor, dropout_rate, num_classes, rob=False):
+    def __init__(self, depth, widen_factor, dropout_rate, num_classes, rob=False, shrink=1):
         super(WideResNet, self).__init__()
         self.in_planes = 16
 
@@ -62,12 +63,12 @@ class WideResNet(nn.Module):
         print('| Wide-Resnet %dx%d' %(depth, k))
         nStages = [16, 16*k, 32*k, 64*k]
 
-        self.conv1 = conv3x3(3,nStages[0])
-        self.layer1 = self._wide_layer(wide_basic, nStages[1], n, dropout_rate, stride=1)
-        self.layer2 = self._wide_layer(wide_basic, nStages[2], n, dropout_rate, stride=2)
-        self.layer3 = self._wide_layer(wide_basic, nStages[3], n, dropout_rate, stride=2)
-        self.bn1 = nn.BatchNorm2d(nStages[3], momentum=0.9)
-        self.linear = nn.Linear(nStages[3], num_classes)
+        self.conv1 = conv3x3(3,int(nStages[0]* shrink))
+        self.layer1 = self._wide_layer(wide_basic, int(nStages[1]* shrink), n, dropout_rate, stride=1)
+        self.layer2 = self._wide_layer(wide_basic, int(nStages[2]* shrink), n, dropout_rate, stride=2)
+        self.layer3 = self._wide_layer(wide_basic, int(nStages[3]* shrink), n, dropout_rate, stride=2)
+        self.bn1 = nn.BatchNorm2d(int(nStages[3]* shrink), momentum=0.9)
+        self.linear = nn.Linear(int(nStages[3]* shrink), num_classes)
 
         self.rob = rob
         
@@ -110,10 +111,17 @@ class WideResNet(nn.Module):
 
 def WideResNet28_10(**kwargs):
     rob = kwargs['robustness'] if 'robustness' in kwargs else False
-    return WideResNet(28, 10, 0, kwargs['num_classes'], rob=rob)
+    shrink = kwargs['shrink'] if 'shrink' in kwargs else 1
+    return WideResNet(28, 10, 0, kwargs['num_classes'], rob=rob, shrink=shrink)
+
+def WideResNet28_4(**kwargs):
+    rob = kwargs['robustness'] if 'robustness' in kwargs else False
+    shrink = kwargs['shrink'] if 'shrink' in kwargs else 1
+    return WideResNet(28, 4, 0, kwargs['num_classes'], rob=rob, shrink=shrink)
 
 if __name__ == '__main__':
-    net=WideResNet(28, 10, 0, 100, False)
-    y = net(Variable(torch.randn(1,3,32,32)))
-
-    print(y.size())
+    net=WideResNet(28, 10, 0, 100, True, 1)
+    #y = net(Variable(torch.randn(1,3,32,32)))
+    #print(y.size())
+    summary(net.cuda(), (3,32,32))
+    

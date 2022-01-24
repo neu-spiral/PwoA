@@ -55,9 +55,9 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
             
         data   = data.float().to(config_dict['device'])
         target = target.to(config_dict['device'])
-        total_loss = 0
-        hsic_loss = 0
+        hsic_loss, total_loss = 0, 0
         optimizer.zero_grad()
+        flag_adv = False
         
         # several tricks
         if config_dict['mixup']:
@@ -67,80 +67,66 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
         if config_dict['adv_train'] == 'adv':
             ##### Random select batch
             if np.random.random_sample() < config_dict['mix_ratio']:
-                data = attack(data, target)
-            output, hiddens = model(data)
-            
-            '''
-            ##### Random select samples in batch
-            attacked_data = attack(data, target)
-            if config_dict['mix_ratio'] > 0:
-                bs = attacked_data.shape[0]
-                indices = np.random.choice(np.arange(bs), size=int(np.ceil(bs*config_dict['mix_ratio'])), replace=False)
-                data[indices] = attacked_data[indices]
-                attacked_data = data
-            output, hiddens = model(attacked_data)
-            data = attacked_data
-            '''
-        elif config_dict['adv_train'] == 'nat':
-            attacked_data = attack(data, target)
-            output, _ = model(attacked_data)
-            _, hiddens = model(data)
-        else:
-            output, hiddens = model(data)
-        
+                flag_adv = True
+                # Trades generate adversarial examples inside
+                if config_dict['base_loss'] == 'ce':
+                    data = attack(data, target)
+        # randomized smoothing
+        elif config_dict['adv_train'] == 'smooth':
+            data = data + torch.randn_like(data, device=config_dict['device']) * 0.25
+                   
         # compute loss
-        criterion = CrossEntropyLossMaybeSmooth(smooth_eps=config_dict['smooth_eps']).to(config_dict['device'])
-        if config_dict['mixup']:
-            loss = mixup_criterion(criterion, output, target_a, target_b, lam, config_dict['smooth'])
+        if config_dict['xentropy_weight'] > 0:
+            if config_dict['base_loss'] == 'trades' and flag_adv:
+                loss, output, hiddens = trades_loss(model, data, target, optimizer, beta=6.0)
+            else:
+                output, hiddens = model(data)
+                criterion = CrossEntropyLossMaybeSmooth(smooth_eps=config_dict['smooth_eps']).to(config_dict['device'])
+                if config_dict['mixup']:
+                    loss = mixup_criterion(criterion, output, target_a, target_b, lam, config_dict['smooth'])
+                else:
+                    loss = criterion(output, target, smooth=config_dict['smooth'])
+            total_loss += (loss * config_dict['xentropy_weight'])
         else:
-            loss = criterion(output, target, smooth=config_dict['smooth'])
-        total_loss += (loss * config_dict['xentropy_weight'])
-        
+            output, hiddens = model(data)
+            
         # compute hsic
-        h_target = target.view(-1,1)
-        h_target = misc.to_categorical(h_target, num_classes=config_dict['num_classes']).float()
-        h_data = data.view(-1, np.prod(data.size()[1:]))
-
-
-        # Zifeng: Different here, we jointly optimize all HSICs together
-        # We can have different weights for each layers
-        
-        # new variable
-        hx_l_list = []
-        hy_l_list = []
-        
         if masks is not None:
-            lx, ly, ld = config_dict['retrain_lx'], config_dict['retrain_ly'], config_dict['hsic_layer_decay']
+            lx, ly = config_dict['retrain_lx'], config_dict['retrain_ly']
         else:
-            lx, ly, ld = config_dict['lambda_x'], config_dict['lambda_y'], config_dict['hsic_layer_decay']
-            
-        if ld > 0:
-            lx, ly = lx * (ld ** len(hiddens)), ly * (ld ** len(hiddens))
+            lx, ly = config_dict['lambda_x'], config_dict['lambda_y']
         
-        for i in range(len(hiddens)):
-            
-            if len(hiddens[i].size()) > 2:
-                hiddens[i] = hiddens[i].view(-1, np.prod(hiddens[i].size()[1:]))
+        if lx > 0 and ly > 0:
+            h_target = target.view(-1,1)
+            h_target = misc.to_categorical(h_target, num_classes=config_dict['num_classes']).float()
+            h_data = data.view(-1, np.prod(data.size()[1:]))
 
-            hx_l, hy_l = hsic_objective(
-                    hiddens[i],
-                    h_target=h_target.float(),
-                    h_data=h_data,
-                    sigma=config_dict['sigma'],
-                    k_type_y=config_dict['k_type_y']
-            )
+            # Zifeng: Different here, we jointly optimize all HSICs together
+            # We can have different weights for each layers
 
-            hx_l_list.append(hx_l)
-            hy_l_list.append(hy_l)
-            
-            if ld > 0:
-                lx, ly = lx/ld, ly/ld
-                #print(i, lx, ly)
-            temp_hsic = lx * hx_l - ly * hy_l
-            hsic_loss += temp_hsic.to(config_dict['device'])
-        total_loss += hsic_loss
+            # new variable
+            hx_l_list = []
+            hy_l_list = []
+
+            for i in range(len(hiddens)):
+                if len(hiddens[i].size()) > 2:
+                    hiddens[i] = hiddens[i].view(-1, np.prod(hiddens[i].size()[1:]))
+                hx_l, hy_l = hsic_objective(
+                        hiddens[i],
+                        h_target=h_target.float(),
+                        h_data=h_data,
+                        sigma=config_dict['sigma'],
+                        k_type_y=config_dict['k_type_y']
+                )
+                hx_l_list.append(hx_l)
+                hy_l_list.append(hy_l)
+
+                temp_hsic = lx * hx_l - ly * hy_l
+                hsic_loss += temp_hsic.to(config_dict['device'])
+
+            total_loss += hsic_loss
                          
-        ### Tong: add admm                  
+        ### Tong: add admm      
         if ADMM is not None:
             z_u_update(config_dict, ADMM, model, cepoch, batch_idx)  # update Z and U variables
             prev_loss, admm_loss, total_loss = append_admm_loss(ADMM, model, total_loss)  # append admm losses
@@ -163,16 +149,14 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
                 dis_loss = distillation_criterion(output, output_pre)
             alpha = config_dict['distill_alpha']
             total_loss += alpha * dis_loss
-            
         
         total_loss.backward() # Back Propagation
-        
         
         ### Tong: for masked training
         if masks is not None:
             with torch.no_grad():
                 for name, W in (model.named_parameters()):
-                    if name in masks:
+                    if name in masks and W.grad is not None:
                         W.grad *= masks[name]
                         
         optimizer.step() # Gradient Descent
@@ -185,25 +169,26 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
         prec1, prec5 = misc.get_accuracy(output, target, topk=(1, 5)) 
 
         batch_acc.update(prec1)
-        batch_loss.update(float(loss.detach().cpu().numpy())) # this is just for xentropy loss! total loss is for xentropy + hsic
-        batch_hsicloss.update(float(hsic_loss.detach().cpu().numpy())) # hsic loss
         batch_totalloss.update(float(total_loss.detach().cpu().numpy())) # admm loss
-        batch_hischx.update(sum(hx_l_list).cpu().detach().numpy())
-        batch_hischy.update(sum(hy_l_list).cpu().detach().numpy())
-
+        if lx > 0 and ly > 0:
+            batch_hsicloss.update(float(hsic_loss.detach().cpu().numpy())) # hsic loss
+            batch_hischx.update(sum(hx_l_list).cpu().detach().numpy())
+            batch_hischy.update(sum(hy_l_list).cpu().detach().numpy())
+        else:
+            batch_hsicloss.update(0) # hsic loss
+            batch_hischx.update(0)
+            batch_hischy.update(0)
+            
         if config_dict['distill']:
             batch_distillation_loss.update(dis_loss.detach().cpu().numpy())
-        #batch_hischx.update(hx_l_list[-1].cpu().detach().numpy())
-        #batch_hischy.update(hy_l_list[-1].cpu().detach().numpy())
 
         # # # preparation log information and print progress # # #
         if config_dict['distill']:
-            msg = 'Train Epoch: {cepoch} [ {cidx:5d}/{tolidx:5d} ({perc:2d}%)] Loss:{loss:.4f} hsicLoss: {hsic_loss:.4f} distillLoss: {distill_loss:.4f} totalLoss: {total_loss:.4f} Acc:{acc:.4f} hsic_xz:{hsic_zx:.4f} hsic_yz:{hsic_zy:.4f}'.format(
+            msg = 'Train Epoch: {cepoch} [ {cidx:5d}/{tolidx:5d} ({perc:2d}%)] hsicLoss: {hsic_loss:.4f} distillLoss: {distill_loss:.8f} totalLoss: {total_loss:.8f} Acc:{acc:.4f} hsic_xz:{hsic_zx:.4f} hsic_yz:{hsic_zy:.4f}'.format(
                         cepoch = cepoch,  
                         cidx = (batch_idx+1)*config_dict['batch_size'], 
                         tolidx = n_data,
                         perc = int(100. * (batch_idx+1)*config_dict['batch_size']/n_data), 
-                        loss = batch_loss.avg, 
                         hsic_loss = batch_hsicloss.avg,
                         distill_loss = batch_distillation_loss.avg,
                         total_loss = batch_totalloss.avg,
@@ -212,13 +197,11 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
                         hsic_zy = batch_hischy.avg,
                     )
         else:
-            msg = 'Train Epoch: {cepoch} [ {cidx:5d}/{tolidx:5d} ({perc:2d}%)] Loss:{loss:.4f} hsicLoss: {hsic_loss:.4f} totalLoss: {total_loss:.4f} Acc:{acc:.4f} hsic_xz:{hsic_zx:.4f} hsic_yz:{hsic_zy:.4f}'.format(
+            msg = 'Train Epoch: {cepoch} [ {cidx:5d}/{tolidx:5d} ({perc:2d}%)] hsicLoss: {hsic_loss:.4f} totalLoss: {total_loss:.4f} Acc:{acc:.4f} hsic_xz:{hsic_zx:.4f} hsic_yz:{hsic_zy:.4f}'.format(
                         cepoch = cepoch,  
                         cidx = (batch_idx+1)*config_dict['batch_size'], 
                         tolidx = n_data,
                         perc = int(100. * (batch_idx+1)*config_dict['batch_size']/n_data), 
-                        loss = batch_loss.avg, 
-                        hsic_loss = batch_hsicloss.avg,
                         total_loss = batch_totalloss.avg,
                         acc  = batch_acc.avg,
                         hsic_zx = batch_hischx.avg,

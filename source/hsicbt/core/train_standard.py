@@ -39,7 +39,9 @@ def standard_train(cepoch, model, data_loader, optimizer, scheduler, config_dict
            
         data   = data.to(config_dict['device'])
         target = target.to(config_dict['device'])
+        total_loss = 0
         optimizer.zero_grad()
+        flag_adv = False
         
         # several tricks
         if config_dict['mixup']:
@@ -49,33 +51,34 @@ def standard_train(cepoch, model, data_loader, optimizer, scheduler, config_dict
         if config_dict['adv_train'] == 'adv':
             ##### Random select batch
             if np.random.random_sample() < config_dict['mix_ratio']:
-                data = attack(data, target)
-            output, hiddens = model(data)
-            
-            '''
-            ##### Random select samples in batch
-            attacked_data = attack(data, target)
-            if config_dict['mix_ratio'] > 0:
-                bs = attacked_data.shape[0]
-                indices = np.random.choice(np.arange(bs), size=int(np.ceil(bs*config_dict['mix_ratio'])), replace=False)
-                data[indices] = attacked_data[indices]
-                attacked_data = data
-            output, hiddens = model(attacked_data)
-            data = attacked_data
-            '''
-        elif config_dict['adv_train'] == 'nat':
-            attacked_data = attack(data, target)
-            output, _ = model(attacked_data)
-            _, hiddens = model(data)
-        else:
-            output, hiddens = model(data)
-
+                flag_adv = True
+                # Trades generate adversarial examples inside
+                if config_dict['base_loss'] == 'ce':
+                    data = attack(data, target)
+                   
         # compute loss
-        criterion = CrossEntropyLossMaybeSmooth(smooth_eps=config_dict['smooth_eps']).to(config_dict['device'])
-        if config_dict['mixup']:
-            loss = mixup_criterion(criterion, output, target_a, target_b, lam, config_dict['smooth'])
+        if config_dict['base_loss'] == 'trades' and flag_adv:
+            loss, output, hiddens = trades_loss(model, data, target, optimizer, beta=6.0)
         else:
-            loss = criterion(output, target, smooth=config_dict['smooth'])
+            output, hiddens = model(data)
+            criterion = CrossEntropyLossMaybeSmooth(smooth_eps=config_dict['smooth_eps']).to(config_dict['device'])
+            if config_dict['mixup']:
+                loss = mixup_criterion(criterion, output, target_a, target_b, lam, config_dict['smooth'])
+            else:
+                loss = criterion(output, target, smooth=config_dict['smooth'])
+        total_loss += (loss * config_dict['xentropy_weight'])
+        
+        '''
+        ##### Random select samples in batch
+        attacked_data = attack(data, target)
+        if config_dict['mix_ratio'] > 0:
+            bs = attacked_data.shape[0]
+            indices = np.random.choice(np.arange(bs), size=int(np.ceil(bs*config_dict['mix_ratio'])), replace=False)
+            data[indices] = attacked_data[indices]
+            attacked_data = data
+        output, hiddens = model(attacked_data)
+        data = attacked_data
+        '''
         
         # compute hsic
         h_target = target.view(-1,1)
@@ -95,13 +98,13 @@ def standard_train(cepoch, model, data_loader, optimizer, scheduler, config_dict
         # add l1_norm
         if 'l1_norm' in config_dict and config_dict['l1_norm']:
             for hidden in hiddens:
-                loss += config_dict['l1_weight']*torch.norm(hidden, 1) 
+                total_loss += config_dict['l1_weight']*torch.norm(hidden, 1) 
             
         ### Tong: add admm
         if ADMM is not None:
             z_u_update(config_dict, ADMM, model, cepoch, batch_idx)  # update Z and U variables
-            pure_loss, admm_loss, loss = append_admm_loss(ADMM, model, loss)  # append admm losses
-        
+            prev_loss, admm_loss, total_loss = append_admm_loss(ADMM, model, total_loss)  # append admm losses
+            
         ### Zifeng
         if config_dict['distill']:
             output_pre, hiddens_pre = pretrained(data)
@@ -119,13 +122,13 @@ def standard_train(cepoch, model, data_loader, optimizer, scheduler, config_dict
             alpha = config_dict['distill_alpha']
             total_loss += alpha * dis_loss
 
-        loss.backward()
+        total_loss.backward()
         
         ### Tong: for masked training
         if masks is not None:
             with torch.no_grad():
                 for name, W in (model.named_parameters()):
-                    if name in masks:
+                    if name in masks and W.grad is not None:
                         W.grad *= masks[name]
                         
         optimizer.step()
@@ -135,12 +138,11 @@ def standard_train(cepoch, model, data_loader, optimizer, scheduler, config_dict
         else:
             scheduler.step()
 
-        loss = float(loss.detach().cpu().numpy())
         prec1, prec5 = misc.get_accuracy(output, target, topk=(1, 5)) 
         prec1 = float(prec1.cpu().numpy())
     
         batch_acc.update(prec1)   
-        batch_loss.update(loss)  
+        batch_loss.update(float(total_loss.detach().cpu().numpy()))  
         batch_hischx.update(hx_l)
         batch_hischy.update(hy_l)
 

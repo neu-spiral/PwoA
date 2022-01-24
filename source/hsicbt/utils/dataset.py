@@ -1,4 +1,6 @@
-from .. import *
+import os
+import  torch
+from    torchvision import datasets, transforms
 
 
 def get_dataset_from_code(code, batch_size):

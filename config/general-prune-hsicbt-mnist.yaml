@@ -1,5 +1,5 @@
-batch_size: 256
-learning_rate: 0.0001
+batch_size: 128
+learning_rate: 0.0005
 epochs: 50
 sigma: 5.
 lambda_x: 0.0
@@ -27,12 +27,12 @@ save_last_model_only: False
 sparsity_type: irregular
 prune_ratio: v1
 admm: True
-admm_epochs: 1
+admm_epochs: 3
 rho: 0.01
 multi_rho: True
-retrain_bs: 256
-retrain_lr: 0.0001
-retrain_ep: 50
+retrain_bs: 128
+retrain_lr: 0.001
+retrain_ep: 20
 retrain_lx: 0.
 retrain_ly: 0.
 retrain_opt: adam

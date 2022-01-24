@@ -1,5 +1,7 @@
 from .. import *
 from ..math.hsic import *
+from ..utils.path    import *
+from ..utils.io    import *
 import torchattacks
 
 def get_current_timestamp():
@@ -29,6 +31,34 @@ def get_in_dimensions(data_code):
         raise ValueError("Invalid or not supported dataset [{}]".format(data_code))
     return in_dim
 
+def eval_and_save(config_dict, model, data_loader, epoch_log_dict, cepoch, nepoch, best, save=True):
+    
+    # Natural Accuracy
+    test_loss, test_acc, test_hx, test_hy, test_dl = get_hsic_epoch(config_dict, model, data_loader)
+    epoch_log_dict = append_epoch_log_dict(epoch_log_dict, test_loss, test_acc, test_hx, test_hy)
+    print("Epoch-[{:03d}]: Test loss: {:.2f}, acc: {:.2f}, hsic_xz: {:.2f}, hsic_yz: {:.2f}.".format(cepoch, test_loss, test_acc, test_hx, test_hy))
+
+    # Robustness Analysis
+    if config_dict['adv_train'] == 'adv':
+        
+        rob_acc, rob_acc5, rob_hx, rob_hy = eval_robust_epoch(config_dict, model, data_loader)
+        epoch_log_dict['rob'].append(rob_acc)
+        epoch_log_dict['rob_hx'].append(rob_hx)
+        epoch_log_dict['rob_hy'].append(rob_hy)
+        
+    # save model
+    if save:
+        filename = os.path.splitext(config_dict['model_file'])[0]
+        if config_dict['save_last_model_only'] and cepoch == nepoch:
+            save_model(model,get_model_path("{}_last.pt".format(filename)))
+        elif cepoch > 0:
+            temp = rob_acc if config_dict['adv_train']=='adv' else test_acc
+            if temp > best:
+                save_model(model,get_model_path("{}.pt".format(filename, str(cepoch))))
+                best = temp
+                print('Save Model')
+    return epoch_log_dict, best
+
 def get_accuracy_epoch(model, dataloader):
     """ Computes the precision@k for the specified values of k
         https://github.com/pytorch/examples/blob/master/imagenet/main.py
@@ -56,7 +86,6 @@ def get_hsic_epoch(config_dict, model, dataloader):
     loss = []
     hx_l_list = []
     hy_l_list = []
-    model = model.to('cuda')
     device = next(model.parameters()).device
     
     model.eval()
@@ -113,13 +142,12 @@ def get_hsic_epoch(config_dict, model, dataloader):
     return np.mean(loss), np.mean(acc), np.mean(hx_l_list), np.mean(hy_l_list), distill_loss
 
 
-def eval_robust_epoch(model, dataloader, config_dict):
+def eval_robust_epoch(config_dict, model, dataloader):
     acc = []
     acc5 = []
     hx_l_list = []
     hy_l_list = []
-    model = model.to('cuda')
-    device = next(model.parameters()).device
+    device = config_dict['device']
     model.eval()
     
     eps = config_dict['epsilon']
@@ -158,16 +186,6 @@ def eval_robust_epoch(model, dataloader, config_dict):
         hx_l_list.append(hsic_hx)
         hy_l_list.append(hsic_hy)
         
-        if config_dict['attack_type'] == 'aa':
-            print('For AutoAttack, only evaluate one batch of the data')
-            # print(data[0])
-            # print(target[0])
-            # print(attacked_data[0])
-            # print(output[0])
-            # print(torch.max(torch.abs(attacked_data[0]-data[0])))
-            # # print()
-            # exit(0)
-            break
     print("Average robust accuracy is top1: {:.4f}, top5: {:.4f}, hsic_xz: {:.2f}, hsic_yz: {:.2f}.".format(np.mean(acc), np.mean(acc5), np.mean(hx_l_list), np.mean(hy_l_list)))
     return np.mean(acc), np.mean(acc5), np.mean(hx_l_list), np.mean(hy_l_list)
 
@@ -186,43 +204,7 @@ def get_accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
-def get_accuracy_hsic(model, dataloader):
-    """ Computes the precision@k for the specified values of k
-        https://github.com/pytorch/examples/blob/master/imagenet/main.py
-    """
-    output_list = []
-    target_list = []
-    for batch_idx, (data, target) in enumerate(dataloader):
-        output, hiddens = model(data.to(next(model.parameters()).device))
-        output = output.cpu().detach().numpy()
-        target = target.cpu().detach().numpy().reshape(-1,1)
-        output_list.append(output)
-        target_list.append(target)
-    output_arr = np.vstack(output_list)
-    target_arr = np.vstack(target_list)
-    avg_acc = 0
-    reorder_list = []
-    for i in range(10):
-        indices = np.where(target_arr==i)[0]
-        select_item = output_arr[indices]
-        out = np.array([np.argmax(vec) for vec in select_item])
-        y = np.mean(select_item, axis=0)
-        while np.argmax(y) in reorder_list:
-            y[np.argmax(y)] = 0
-        reorder_list.append(np.argmax(y))
-        num_correct = np.where(out==np.argmax(y))[0]
-        accuracy = float(num_correct.shape[0])/float(out.shape[0])
-        avg_acc += accuracy
-    avg_acc /= 10.
-
-    return avg_acc*100., reorder_list
-
-def append_epoch_log_dict(epoch_log_dict, train_loss, train_acc, train_hx, train_hy, test_loss, test_acc, test_hx, test_hy):
-    epoch_log_dict['train_loss'].append(train_loss)
-    epoch_log_dict['train_acc'].append(train_acc)
-    epoch_log_dict['train_hx'].append(train_hx)
-    epoch_log_dict['train_hy'].append(train_hy)
-
+def append_epoch_log_dict(epoch_log_dict, test_loss, test_acc, test_hx, test_hy):
     epoch_log_dict['test_loss'].append(test_loss)
     epoch_log_dict['test_acc'].append(test_acc)
     epoch_log_dict['test_hx'].append(test_hx)

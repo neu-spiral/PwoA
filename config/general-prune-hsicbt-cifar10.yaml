@@ -1,16 +1,16 @@
 batch_size: 128
 learning_rate: 0.01
-epochs: 100
+epochs: 0
 sigma: 5.
 lambda_x: 0
 lambda_y: 0
 seed: 1234
 k_type_y: linear
-num_classes: 10
 
 device: cuda
-model: resnet18
+model: wrn34-10
 data_code: cifar10
+num_classes: 10
 model_file: test.pt
 load_model: test.pt
 checkpoint: null
@@ -35,12 +35,12 @@ save_last_model_only: False
 sparsity_type: irregular
 prune_ratio: v1
 admm: True
-admm_epochs: 20
-rho: 0.0001
+admm_epochs: 3
+rho: 0.01
 multi_rho: True
 retrain_bs: 128
-retrain_lr: 0.01
-retrain_ep: 100
+retrain_lr: 0.005
+retrain_ep: 50
 retrain_lx: 0
 retrain_ly: 0
 retrain_opt: sgd

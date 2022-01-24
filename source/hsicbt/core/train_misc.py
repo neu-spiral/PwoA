@@ -5,7 +5,9 @@ from ..math.admm import *
 from ..model.lenet import *
 from ..model.vgg import *
 from ..model.resnet import *
-from ..model.wide_resnet import *
+from ..model.wide_resnet import WideResNet28_10
+from ..model.wideresnet import WideResNet28_4, WideResNet34_10
+
 
 def activations_extraction(model, data_loader, out_dim=10, hid_idx=-1,):
 
@@ -161,12 +163,13 @@ def trades_loss(model,
                 perturb_steps=10,
                 beta=1.0,
                 distance='l_inf'):
+    device = next(model.parameters()).device
     # define KL-loss
     criterion_kl = nn.KLDivLoss(size_average=False)
     model.eval()
     batch_size = len(x_natural)
     # generate adversarial example
-    x_adv = x_natural.detach() + 0.001 * torch.randn(x_natural.shape).cuda().detach()
+    x_adv = x_natural.detach() + 0.001 * torch.randn(x_natural.shape).to(device).detach()
     if distance == 'l_inf':
         for _ in range(perturb_steps):
             x_adv.requires_grad_()
@@ -178,7 +181,7 @@ def trades_loss(model,
             x_adv = torch.min(torch.max(x_adv, x_natural - epsilon), x_natural + epsilon)
             x_adv = torch.clamp(x_adv, 0.0, 1.0)
     elif distance == 'l_2':
-        delta = 0.001 * torch.randn(x_natural.shape).cuda().detach()
+        delta = 0.001 * torch.randn(x_natural.shape).to(device).detach()
         delta = Variable(delta.data, requires_grad=True)
 
         # Setup optimizers
@@ -219,7 +222,7 @@ def trades_loss(model,
     loss_robust = (1.0 / batch_size) * criterion_kl(F.log_softmax(model(x_adv)[0], dim=1),
                                                     F.softmax(model(x_natural)[0], dim=1))
     loss = loss_natural + beta * loss_robust
-    return loss, logits.detach()
+    return loss, logits.detach(), model(x_adv)[1]
 
 def model_distribution(config_dict):
 
@@ -231,8 +234,14 @@ def model_distribution(config_dict):
         model = VGG16(**config_dict)
     elif config_dict['model'] == 'resnet18':
         model = ResNet18(**config_dict)
-    elif config_dict['model'] == 'wideresnet':
+    elif config_dict['model'] == 'resnet50':
+        model = ResNet50(**config_dict)
+    elif config_dict['model'] == 'wideresnet' or config_dict['model'] == 'wrn28-10':
         model = WideResNet28_10(**config_dict)
+    elif config_dict['model'] == 'wrn28-4':
+        model = WideResNet28_4(**config_dict)
+    elif config_dict['model'] == 'wrn34-10':
+        model = WideResNet34_10(**config_dict)
     else:
         raise ValueError("Unknown model name or not support [{}]".format(config_dict['model']))
 

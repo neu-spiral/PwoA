@@ -124,8 +124,10 @@ def set_model_mask(model,mask):
             if name in mask:
                 W.data *= mask[name].cuda()
 
-def get_model_mask(model=None):
+def get_model_mask(model):
     masks = {}
+    device = next(model.parameters()).device
+    
     for name, W in (model.named_parameters()):
         if 'mask' in name:
             continue
@@ -133,9 +135,9 @@ def get_model_mask(model=None):
         non_zeros = (weight != 0)
         non_zeros = non_zeros.astype(np.float32)
         zero_mask = torch.from_numpy(non_zeros)
-        W = torch.from_numpy(weight).cuda()
+        W = torch.from_numpy(weight).to(device)
         W.data = W
-        masks[name] = zero_mask.cuda()
+        masks[name] = zero_mask.to(device)
         #print(name,zero_mask.nonzero().shape)
     return masks
 
