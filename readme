@@ -9,7 +9,10 @@ tqdm-4.33.0
 yaml-0.1.7
 
 ** Experiments **
-One could produce the main results of Table 2, 3, 4, 5 & Figure 3 (PwoA) by this repository. We will release the full version of the repository soon. To setup adversarially robust pre-trained models for pruning, we consider five adversarially trained models provided by open-source state-of-the-art work, summarized in Table 1 in our paper. Please download those models from their original repository and saved in './assets/models/' under this repo.
+One could produce the main results of Table 2, 3, 4, 5 & Figure 3 (PwoA) by this repository. We will release the full version of the repository soon. 
+
+To setup adversarially robust pre-trained models for pruning, we consider five adversarially trained models provided by open-source state-of-the-art work, 
+summarized in Table 1 in our paper. Please download those models from their original repository and saved in './assets/models/' under this repo.
 
 To reproduce experiments that we have in the paper, one could run our batch script by the following instruction:
     source env.sh
