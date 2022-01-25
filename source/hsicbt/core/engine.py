@@ -108,7 +108,7 @@ def training_hsic_prune(config_dict):
     epoch_time = meter.AverageMeter()
     
     # Initializing ADMM; if not admm, do hard pruning only
-    admm = ADMM(config_dict, model, config=get_pr_path(config_dict), rho=config_dict['rho']) if config_dict['admm'] else None
+    admm = ADMM(config_dict, model, rho=config_dict['rho']) if config_dict['admm'] else None
     
     for cepoch in range(0, nepoch+1):
         if cepoch > 0:

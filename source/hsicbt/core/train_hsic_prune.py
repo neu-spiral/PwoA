@@ -22,11 +22,11 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
     batch_size = config_dict['retrain_bs'] if masks is not None else config_dict['batch_size']
     n_data = batch_size * len(data_loader)
 
-    ### Tong: initialize admm
+    ### initialize admm
     if ADMM is not None: 
         admm_initialization(config_dict, ADMM=ADMM, model=model)
     
-    ### Zifeng: initialize teacher model
+    ### initialize teacher model
     if config_dict['distill']:
         pretrained = config_dict['pretrained']
         distillation_criterion = config_dict['distillation_criterion']
@@ -101,7 +101,7 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
             h_target = misc.to_categorical(h_target, num_classes=config_dict['num_classes']).float()
             h_data = data.view(-1, np.prod(data.size()[1:]))
 
-            # Zifeng: Different here, we jointly optimize all HSICs together
+            # Different here, we jointly optimize all HSICs together
             # We can have different weights for each layers
 
             # new variable
@@ -126,12 +126,12 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
 
             total_loss += hsic_loss
                          
-        ### Tong: add admm      
+        ### add admm      
         if ADMM is not None:
             z_u_update(config_dict, ADMM, model, cepoch, batch_idx)  # update Z and U variables
             prev_loss, admm_loss, total_loss = append_admm_loss(ADMM, model, total_loss)  # append admm losses
         
-        ### Zifeng
+        ### self-distillation
         if config_dict['distill']:
             output_pre, hiddens_pre = pretrained(data)
             if config_dict['distill_loss'] == 'kl':
@@ -152,7 +152,7 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
         
         total_loss.backward() # Back Propagation
         
-        ### Tong: for masked training
+        ### for masked training
         if masks is not None:
             with torch.no_grad():
                 for name, W in (model.named_parameters()):

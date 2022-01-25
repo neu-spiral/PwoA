@@ -16,11 +16,11 @@ def standard_train(cepoch, model, data_loader, optimizer, scheduler, config_dict
 
     n_data = config_dict['batch_size'] * len(data_loader)
     
-    ### Tong: initialize admm
+    ### initialize admm
     if ADMM is not None: 
         admm_initialization(config_dict, ADMM=ADMM, model=model)
     
-    ### Zifeng: initialize teacher model
+    ### initialize teacher model
     if config_dict['distill']:
         pretrained = config_dict['pretrained']
         distillation_criterion = config_dict['distillation_criterion']
@@ -67,18 +67,7 @@ def standard_train(cepoch, model, data_loader, optimizer, scheduler, config_dict
             else:
                 loss = criterion(output, target, smooth=config_dict['smooth'])
         total_loss += (loss * config_dict['xentropy_weight'])
-        
-        '''
-        ##### Random select samples in batch
-        attacked_data = attack(data, target)
-        if config_dict['mix_ratio'] > 0:
-            bs = attacked_data.shape[0]
-            indices = np.random.choice(np.arange(bs), size=int(np.ceil(bs*config_dict['mix_ratio'])), replace=False)
-            data[indices] = attacked_data[indices]
-            attacked_data = data
-        output, hiddens = model(attacked_data)
-        data = attacked_data
-        '''
+       
         
         # compute hsic
         h_target = target.view(-1,1)
@@ -100,12 +89,12 @@ def standard_train(cepoch, model, data_loader, optimizer, scheduler, config_dict
             for hidden in hiddens:
                 total_loss += config_dict['l1_weight']*torch.norm(hidden, 1) 
             
-        ### Tong: add admm
+        ### add admm
         if ADMM is not None:
             z_u_update(config_dict, ADMM, model, cepoch, batch_idx)  # update Z and U variables
             prev_loss, admm_loss, total_loss = append_admm_loss(ADMM, model, total_loss)  # append admm losses
             
-        ### Zifeng
+        ### self-distillation
         if config_dict['distill']:
             output_pre, hiddens_pre = pretrained(data)
             if config_dict['distill_loss'] == 'kl':
@@ -124,7 +113,7 @@ def standard_train(cepoch, model, data_loader, optimizer, scheduler, config_dict
 
         total_loss.backward()
         
-        ### Tong: for masked training
+        ### for masked training
         if masks is not None:
             with torch.no_grad():
                 for name, W in (model.named_parameters()):

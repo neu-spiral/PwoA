@@ -49,13 +49,7 @@ def set_optimizer(config_dict, model, train_loader, opt, lr, epochs):
         optimizer = torch.optim.SGD(model.parameters(), optimizer_init_lr, momentum=0.9,weight_decay=1e-4)
     else:
         optimizer = torch.optim.Adam(model.parameters(), optimizer_init_lr)
-    '''if config_dict['training_type'] == 'competitor3' or config_dict['training_type'] == 'competitor4' or config_dict['adv_train']:
-        if config_dict['data_code'] == 'mnist':
-            print('using sgd as optimizer')
-            optimizer = optim.SGD(model.parameters(), lr=config_dict['learning_rate'], momentum=0.9)
-        elif config_dict['data_code'] == 'cifar10':
-            optimizer = optim.SGD(model.parameters(), lr=config_dict['learning_rate'], momentum=0.9, weight_decay=0.0035)
-    '''   
+     
     scheduler = None
     if config_dict['lr_scheduler'] == 'cosine':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * len(train_loader), eta_min=4e-08)

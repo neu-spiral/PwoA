@@ -14,7 +14,7 @@ from itertools import combinations
 import collections
 
 class ADMM:
-    def __init__(self, config_dict, model, config, rho=0.001):
+    def __init__(self, config_dict, model, rho=0.001):
         self.ADMM_U = {}
         self.ADMM_Z = {}
         self.rho = rho
@@ -22,45 +22,33 @@ class ADMM:
         self.prune_ratio = config_dict['prune_ratio']
         self.device = config_dict['device']
         
-        self.init(config, model)
+        self.init(model)
 
-    def init(self, config, model):
+    def init(self, model):
         """
         Args:
             config: configuration file that has settings for prune ratios, rhos
         called by ADMM constructor. config should be a .yaml file
 
         """
-        if not isinstance(config, str):
-            raise Exception("filename must be a str")
-        with open(config, "r") as stream:
-            try:
-                raw_dict = yaml.load(stream)
-                self.prune_ratios = raw_dict['prune_ratios']
-                for k, v in self.prune_ratios.items():
-                    self.rhos[k] = self.rho
-                #print(self.rho)
-                # Tong added: if pruning ratio is given
-                if isinstance(self.prune_ratio, float):
-                    for k in self.prune_ratios:
-                        self.prune_ratios[k] = self.prune_ratio
-                print(self.prune_ratios) 
-                # Edit end
-                
-                for (name, W) in model.named_parameters():
-                    if name not in self.prune_ratios:
-                        continue
-                    self.ADMM_U[name] = torch.zeros(W.shape).to(self.device)  # add U
-                    self.ADMM_Z[name] = torch.Tensor(W.shape).to(self.device)  # add Z
-                    # if(len(W.size()) == 4):
-                    #     if name not in self.prune_ratios:
-                    #         continue
-                    #     self.ADMM_U[name] = torch.zeros(W.shape).cuda()  # add U
-                    #     self.ADMM_Z[name] = torch.Tensor(W.shape).cuda()  # add Z
-
-            except yaml.YAMLError as exc:
-                print(exc)
-
+        # setup pruning ratio
+        self.prune_ratios = collections.defaultdict(float)
+        for name, weight in model.named_parameters():
+            if 'weight' in name:    
+                self.prune_ratios[name] = self.prune_ratio
+        
+        # setup rho
+        for k, v in self.prune_ratios.items():
+            self.rhos[k] = self.rho
+        
+        print(self.prune_ratios) 
+        
+        # initialize aux and dual params
+        for (name, W) in model.named_parameters():
+            if name not in self.prune_ratios:
+                continue
+            self.ADMM_U[name] = torch.zeros(W.shape).to(self.device)  # add U
+            self.ADMM_Z[name] = torch.Tensor(W.shape).to(self.device)  # add Z
 
 def random_pruning(weight, prune_ratio, sparsity_type):
     weight = weight.cpu().detach().numpy()  # convert cpu tensor to numpy
