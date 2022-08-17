@@ -45,7 +45,7 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
                                       random_start=config_dict['random_start'],
                                       )
     start_time = time.time()   
-    pbar = tqdm(enumerate(data_loader), total=n_data/batch_size, ncols=120)
+    pbar = tqdm(enumerate(data_loader), total=n_data/batch_size, ncols=200)
     for batch_idx, (data, target) in pbar:
         
         # data augmentation for robustness attack
@@ -60,7 +60,7 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
         flag_adv = False
         
         # several tricks
-        if config_dict['mixup']:
+        if config_dict['mix_up']:
             data, target_a, target_b, lam = mixup_data(data, target, config_dict['alpha'])
         
         # adversarial training
@@ -82,7 +82,7 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
             else:
                 output, hiddens = model(data)
                 criterion = CrossEntropyLossMaybeSmooth(smooth_eps=config_dict['smooth_eps']).to(config_dict['device'])
-                if config_dict['mixup']:
+                if config_dict['mix_up']:
                     loss = mixup_criterion(criterion, output, target_a, target_b, lam, config_dict['smooth'])
                 else:
                     loss = criterion(output, target, smooth=config_dict['smooth'])
@@ -184,7 +184,7 @@ def hsic_prune(cepoch, model, data_loader, optimizer, scheduler, config_dict, AD
 
         # # # preparation log information and print progress # # #
         if config_dict['distill']:
-            msg = 'Train Epoch: {cepoch} [ {cidx:5d}/{tolidx:5d} ({perc:2d}%)] hsicLoss: {hsic_loss:.4f} distillLoss: {distill_loss:.8f} totalLoss: {total_loss:.8f} Acc:{acc:.4f} hsic_xz:{hsic_zx:.4f} hsic_yz:{hsic_zy:.4f}'.format(
+            msg = 'Train Epoch: {cepoch} [ {cidx:5d}/{tolidx:5d} ({perc:2d}%)] hsicLoss: {hsic_loss:.4f} distillLoss: {distill_loss:.8f} totalLoss: {total_loss:.4f} Acc:{acc:.4f} hsic_xz:{hsic_zx:.2f} hsic_yz:{hsic_zy:.2f}'.format(
                         cepoch = cepoch,  
                         cidx = (batch_idx+1)*config_dict['batch_size'], 
                         tolidx = n_data,

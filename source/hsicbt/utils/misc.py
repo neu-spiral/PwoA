@@ -138,7 +138,6 @@ def get_hsic_epoch(config_dict, model, dataloader):
             distill_loss = np.mean(distill_l_list)
         else:
             distill_loss = -1          
-
     return np.mean(loss), np.mean(acc), np.mean(hx_l_list), np.mean(hy_l_list), distill_loss
 
 
@@ -189,20 +188,24 @@ def eval_robust_epoch(config_dict, model, dataloader):
     print("Average robust accuracy is top1: {:.4f}, top5: {:.4f}, hsic_xz: {:.2f}, hsic_yz: {:.2f}.".format(np.mean(acc), np.mean(acc5), np.mean(hx_l_list), np.mean(hy_l_list)))
     return np.mean(acc), np.mean(acc5), np.mean(hx_l_list), np.mean(hy_l_list)
 
+
 def get_accuracy(output, target, topk=(1,)):
-    """ Computes the precision@k for the specified values of k
-        https://github.com/pytorch/examples/blob/master/imagenet/main.py
-    """
-    maxk = max(topk)
-    batch_size = target.size(0)
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
-    res = []
-    for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    with torch.no_grad():
+        maxk = max(topk)
+        batch_size = target.size(0)
+
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+        res = []
+        for k in topk:
+            correct_k = correct[:k].float().sum()
+            res.append(correct_k.mul_(100.0 / batch_size))
+        
+        return res
+
 
 def append_epoch_log_dict(epoch_log_dict, test_loss, test_acc, test_hx, test_hy):
     epoch_log_dict['test_loss'].append(test_loss)

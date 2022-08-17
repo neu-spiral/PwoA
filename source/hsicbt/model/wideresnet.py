@@ -38,12 +38,12 @@ class BasicBlock(nn.Module):
         )
 
     def forward(self, x):
-        # added for hsic trainining
+        # Tong added for hsic trainining
         if isinstance(x, tuple):
             x, output_list = x
         else:
             output_list = []
-        # added ends
+        # Tong added ends
         
         if not self.equalInOut:
             x = self.relu1(self.bn1(x))

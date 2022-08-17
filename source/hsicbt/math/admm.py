@@ -20,6 +20,7 @@ class ADMM:
         self.rho = rho
         self.rhos = {}
         self.prune_ratio = config_dict['prune_ratio']
+        self.prune_ratios = {}
         self.device = config_dict['device']
         
         self.init(model)
@@ -32,9 +33,9 @@ class ADMM:
 
         """
         # setup pruning ratio
-        self.prune_ratios = collections.defaultdict(float)
+        self.prune_ratios = {}
         for name, weight in model.named_parameters():
-            if 'weight' in name:    
+            if (len(weight.size()) == 4) or 'fc.weight' in name:
                 self.prune_ratios[name] = self.prune_ratio
         
         # setup rho
@@ -49,6 +50,7 @@ class ADMM:
                 continue
             self.ADMM_U[name] = torch.zeros(W.shape).to(self.device)  # add U
             self.ADMM_Z[name] = torch.Tensor(W.shape).to(self.device)  # add Z
+
 
 def random_pruning(weight, prune_ratio, sparsity_type):
     weight = weight.cpu().detach().numpy()  # convert cpu tensor to numpy

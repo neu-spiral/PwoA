@@ -5,11 +5,13 @@ from .  import *
 
 from .train_misc     import *
 from .train_standard import *
-from ..utils.path    import *
 from .train_hsic_prune     import *
 
 from ..math.admm import *
 from ..utils.masks import *
+from ..utils.path    import *
+from ..utils.io    import *
+
 
 import torch
 import time
@@ -86,6 +88,7 @@ def training_hsic_prune(config_dict):
     # distillation teacher model
     if config_dict['distill']:
         pretrained = deepcopy(model)
+        #pretrained.load_state_dict(torch.load(config_dict['distill_model_path']))
         pretrained = load_state_dict(pretrained, config_dict['distill_model_path'])
         pretrained = pretrained.to(config_dict['device'])
         pretrained.eval()
@@ -124,9 +127,13 @@ def training_hsic_prune(config_dict):
             epoch_time.update(time.time()-start_time)
         
         if (cepoch-1) % config_dict['admm_epochs'] == 0:
-            epoch_log_dict, best = eval_and_save(config_dict, model, test_loader, 
-                                                 epoch_log_dict, cepoch, nepoch, best, False)
+        #model_single_output.load_state_dict(model.state_dict())
+        #model_single_output.eval()
+            epoch_log_dict, best = eval_and_save(config_dict, model, test_loader, epoch_log_dict, cepoch, nepoch, best, False)
                 
+        print(get_lr(optimizer))
+        
+        
     # If not admm, do hard pruning only
     filename = os.path.splitext(config_dict['model_file'])[0]
     save_model(model,get_model_path("{}.pt".format(filename+'_beforeHardprune')))
@@ -157,8 +164,7 @@ def training_hsic_prune(config_dict):
                 raise ValueError("Unknown training type or not support [{}]".format(config_dict['retraining_type']))
             epoch_time.update(time.time()-start_time)
         
-        epoch_log_dict, best = eval_and_save(config_dict, model, test_loader, 
-                                             epoch_log_dict, cepoch, nepoch, best, True)
+        epoch_log_dict, best = eval_and_save(config_dict, model, test_loader, epoch_log_dict, cepoch, nepoch, best, True)
                
     log_dict['epoch_log_dict'] = epoch_log_dict
     filename = "{}.npy".format(os.path.splitext(config_dict['model_file'])[0])
