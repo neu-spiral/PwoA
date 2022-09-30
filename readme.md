@@ -4,8 +4,7 @@
 * [Citing This Paper](#citing-this-paper)
 * [Abstract](#abstract)
 * [Environment Setup](#environment-setup)
-* [Running Framework](#running-framework) 
-* [Model Zoo](#model-zoo)
+* [Running Framework](#running-framework)
 
 
 ## Acknowledgement 
